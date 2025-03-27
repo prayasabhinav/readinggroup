@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reading Group Topic Voting</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-stats {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        #topic-form {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #topic-input {
+            flex-grow: 1;
+            padding: 8px;
+            margin-right: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .topic-list {
+            list-style: none;
+            padding: 0;
+        }
+        .topic-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .vote-btn {
+            background-color: #2196F3;
+            margin-left: 10px;
+        }
+        .votes {
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .admin-panel {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            display: none;
+        }
+        .selected-topic {
+            background-color: #e3f2fd;
+            border: 2px solid #2196F3;
+        }
+        .login-btn {
+            background-color: #4285f4;
+        }
+        .logout-btn {
+            background-color: #dc3545;
+        }
+        .pdf-link {
+            display: inline-block;
+            margin-top: 10px;
+            background-color: #f44336;
+            color: white;
+            padding: 6px 12px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .pdf-link:hover {
+            background-color: #d32f2f;
+        }
+        .upload-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .file-input-container {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+        }
+        #pdf-file {
+            margin: 10px 0;
+        }
+        .admin-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        .current-selection {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #2196F3;
+            display: flex;
+            flex-direction: column;
+        }
+        .selected-topic-header {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .selected-week {
+            font-size: 0.9em;
+            color: #2196F3;
+            font-weight: bold;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+        .pdf-container {
+            margin-top: 10px;
+        }
+        .danger-btn {
+            background-color: #dc3545;
+            color: white;
+            margin-right: 10px;
+        }
+        .warning-btn {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .danger-btn:hover {
+            background-color: #bd2130;
+        }
+        .warning-btn:hover {
+            background-color: #e0a800;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>University Reading Group Topics</h1>
+        <div class="user-info">
+            <span id="user-name"></span>
+            <button id="login-btn" class="login-btn">Login with Google</button>
+            <button id="logout-btn" class="logout-btn" style="display: none;">Logout</button>
+        </div>
+    </div>
+    
+    <div id="user-stats" class="user-stats" style="display: none;">
+        <p>Your Stats:</p>
+        <p>Topics You've Upvoted: <span id="voted-count">0</span></p>
+        <p>Your Upvoted Topics That Got Selected: <span id="selected-count">0</span></p>
+    </div>
+    
+    <div id="current-selection" class="current-selection" style="display: none;">
+        <div class="selected-topic-header">Current Selection for the Week</div>
+        <div id="selected-topic-text"></div>
+        <div id="selected-week-date" class="selected-week"></div>
+        <div id="selected-pdf-container" class="pdf-container"></div>
+    </div>
+    
+    <form id="topic-form" style="display: none;">
+        <input type="text" id="topic-input" placeholder="Propose a reading topic..." required>
+        <button type="submit">Propose</button>
+    </form>
+    
+    <h2 id="proposed-topics-heading">Proposed Topics</h2>
+    <ul id="topic-list" class="topic-list"></ul>
+    
+    <div id="admin-panel" class="admin-panel">
+        <h2>Admin Panel</h2>
+        <div class="admin-section">
+            <h3>Select Topic for Next Week</h3>
+            <select id="topic-select">
+                <option value="">Select a topic...</option>
+            </select>
+            <button id="select-topic-btn">Select Topic</button>
+        </div>
+        <div id="upload-pdf-section" class="upload-section" style="display: none;">
+            <h3>Upload Reading Material (PDF)</h3>
+            <form id="pdf-upload-form" enctype="multipart/form-data">
+                <div class="file-input-container">
+                    <label for="pdf-file">Select PDF file (max 10MB):</label>
+                    <input type="file" id="pdf-file" name="pdfFile" accept="application/pdf" required>
+                </div>
+                <button type="submit" id="upload-pdf-btn">Upload PDF</button>
+            </form>
+            <div id="upload-status" style="margin-top: 10px;"></div>
+        </div>
+        <div id="clear-topics-section" class="admin-section">
+            <h3>Clear Topics</h3>
+            <div style="margin-bottom: 10px;">
+                <button id="clear-all-btn" class="danger-btn">Clear All Topics</button>
+                <p style="font-size: 0.8em; color: #666; margin-top: 5px;">This will delete all topics (cannot be undone)</p>
+            </div>
+            <div>
+                <button id="clear-except-selected-btn" class="warning-btn">Clear All Except Selected</button>
+                <p style="font-size: 0.8em; color: #666; margin-top: 5px;">This will keep only the currently selected topic</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html> 
