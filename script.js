@@ -26,10 +26,13 @@ const proposedTopicsHeading = document.getElementById('proposed-topics-heading')
 let currentUser = null;
 let selectedTopicId = null;
 
+// API URL base - use relative paths for flexibility in deployment
+const API_BASE = '';
+
 // Check authentication status
 async function checkAuth() {
     try {
-        const response = await fetch('http://localhost:3000/api/user', {
+        const response = await fetch(`${API_BASE}/api/user`, {
             credentials: 'include'
         });
         if (response.ok) {
@@ -50,7 +53,7 @@ async function checkAuth() {
 // Fetch user statistics
 async function fetchUserStats() {
     try {
-        const response = await fetch('http://localhost:3000/api/user/stats', {
+        const response = await fetch(`${API_BASE}/api/user/stats`, {
             credentials: 'include'
         });
         if (response.ok) {
@@ -87,15 +90,26 @@ function updateUIForGuest() {
     topicForm.style.display = 'none';
     adminPanel.style.display = 'none';
     userStats.style.display = 'none';
+    // Hide topics for logged out users
+    topicList.innerHTML = '';
+    proposedTopicsHeading.style.display = 'none';
+    currentSelection.style.display = 'none';
 }
 
 // Load topics from server
 async function loadTopics() {
     try {
-        const response = await fetch('http://localhost:3000/api/topics', {
+        const response = await fetch(`${API_BASE}/api/topics`, {
             credentials: 'include'
         });
         const topics = await response.json();
+        
+        // Only show topics if the user is logged in
+        if (!currentUser) {
+            proposedTopicsHeading.style.display = 'none';
+            topicList.innerHTML = '';
+            return;
+        }
         
         // Hide or show the proposed topics heading based on whether there are topics
         if (topics.length === 0) {
@@ -126,16 +140,19 @@ function createPdfLink(pdfFile) {
 
 // Update current selection display
 function updateCurrentSelection(topics) {
+    // Don't show current selection for logged-out users
+    if (!currentUser) {
+        currentSelection.style.display = 'none';
+        return;
+    }
+    
     const selectedTopic = topics.find(topic => topic.isSelected);
     
     if (selectedTopic) {
         selectedTopicText.textContent = selectedTopic.text;
         
-        if (selectedTopic.weekDate) {
-            selectedWeekDate.textContent = `Selected for: ${selectedTopic.weekDate}`;
-        } else {
-            selectedWeekDate.textContent = '';
-        }
+        // Don't show week dates as requested
+        selectedWeekDate.style.display = 'none';
         
         // Display PDF if available
         selectedPdfContainer.innerHTML = '';
@@ -165,6 +182,12 @@ function updateCurrentSelection(topics) {
 
 // Render topics
 function renderTopics(topics) {
+    // Don't render topics for logged-out users
+    if (!currentUser) {
+        topicList.innerHTML = '';
+        return;
+    }
+    
     topicList.innerHTML = '';
     
     topics.forEach(topic => {
@@ -182,12 +205,7 @@ function renderTopics(topics) {
         topicText.style.fontWeight = topic.isSelected ? 'bold' : 'normal';
         topicInfo.appendChild(topicText);
         
-        if (topic.isSelected && topic.weekDate) {
-            const weekDateSpan = document.createElement('div');
-            weekDateSpan.className = 'selected-week';
-            weekDateSpan.textContent = `Selected for: ${topic.weekDate}`;
-            topicInfo.appendChild(weekDateSpan);
-        }
+        // Never show week dates as requested
         
         const voteContainer = document.createElement('div');
         voteContainer.style.display = 'flex';
@@ -249,7 +267,7 @@ function updateTopicSelect(topics) {
 // Load topics for admin select
 async function loadTopicsForSelect() {
     try {
-        const response = await fetch('http://localhost:3000/api/topics', {
+        const response = await fetch(`${API_BASE}/api/topics`, {
             credentials: 'include'
         });
         const topics = await response.json();
@@ -262,7 +280,7 @@ async function loadTopicsForSelect() {
 // Add a new topic
 async function addTopic(text) {
     try {
-        const response = await fetch('http://localhost:3000/api/topics', {
+        const response = await fetch(`${API_BASE}/api/topics`, {
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -291,7 +309,7 @@ async function upvoteTopic(topicId) {
             return;
         }
         
-        const response = await fetch(`http://localhost:3000/api/topics/${topicId}/upvote`, {
+        const response = await fetch(`${API_BASE}/api/topics/${topicId}/upvote`, {
             method: 'POST',
             credentials: 'include'
         });
@@ -316,19 +334,32 @@ async function upvoteTopic(topicId) {
 // Select a topic
 async function selectTopic(topicId) {
     try {
-        const response = await fetch(`http://localhost:3000/api/topics/${topicId}/select`, {
+        console.log(`Attempting to select topic with ID: ${topicId}`);
+        
+        if (!topicId) {
+            console.error('Cannot select topic: No topic ID provided');
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE}/api/topics/${topicId}/select`, {
             method: 'POST',
             credentials: 'include'
         });
         
         if (response.ok) {
+            console.log('Topic selection successful');
             selectedTopicId = topicId;
             uploadPdfSection.style.display = 'block';
             loadTopics();
             fetchUserStats();
+        } else {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('Selection error:', errorData.error || response.statusText);
+            alert(`Error selecting topic: ${errorData.error || response.statusText}`);
         }
     } catch (error) {
         console.error('Failed to select topic:', error);
+        alert('Failed to select topic. Please try again.');
     }
 }
 
@@ -338,7 +369,7 @@ async function uploadPdf(topicId, formData) {
         uploadStatus.textContent = 'Uploading...';
         uploadStatus.style.color = 'blue';
         
-        const response = await fetch(`http://localhost:3000/api/topics/${topicId}/upload-pdf`, {
+        const response = await fetch(`${API_BASE}/api/topics/${topicId}/upload-pdf`, {
             method: 'POST',
             credentials: 'include',
             body: formData
@@ -367,7 +398,7 @@ async function clearAllTopics() {
     }
     
     try {
-        const response = await fetch('http://localhost:3000/api/topics/clear-all', {
+        const response = await fetch(`${API_BASE}/api/topics/clear-all`, {
             method: 'DELETE',
             credentials: 'include'
         });
@@ -394,7 +425,7 @@ async function clearExceptSelected() {
     }
     
     try {
-        const response = await fetch('http://localhost:3000/api/topics/clear-except-selected', {
+        const response = await fetch(`${API_BASE}/api/topics/clear-except-selected`, {
             method: 'DELETE',
             credentials: 'include'
         });
@@ -416,11 +447,11 @@ async function clearExceptSelected() {
 
 // Event listeners
 loginBtn.addEventListener('click', () => {
-    window.location.href = 'http://localhost:3000/auth/google';
+    window.location.href = `${API_BASE}/auth/google`;
 });
 
 logoutBtn.addEventListener('click', () => {
-    window.location.href = 'http://localhost:3000/auth/logout';
+    window.location.href = `${API_BASE}/auth/logout`;
 });
 
 topicForm.addEventListener('submit', function(e) {
@@ -434,8 +465,12 @@ topicForm.addEventListener('submit', function(e) {
 
 selectTopicBtn.addEventListener('click', () => {
     const topicId = topicSelect.value;
+    console.log('Select topic button clicked, selected ID:', topicId);
+    
     if (topicId) {
         selectTopic(topicId);
+    } else {
+        alert('Please select a topic from the dropdown first.');
     }
 });
 
