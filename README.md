@@ -1,4 +1,4 @@
-# Reading Group Topic Voting System
+# Antardhun Reading Group Topic Voting System @ Anant
 
 A simple web application for proposing and voting on topics for a university reading group.
 
