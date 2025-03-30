@@ -111,8 +111,11 @@ async function loadTopics() {
             return;
         }
         
-        // Hide or show the proposed topics heading based on whether there are topics
-        if (topics.length === 0) {
+        // Count non-selected topics
+        const nonSelectedTopics = topics.filter(topic => !topic.isSelected);
+        
+        // Hide or show the proposed topics heading based on whether there are non-selected topics
+        if (nonSelectedTopics.length === 0) {
             proposedTopicsHeading.style.display = 'none';
         } else {
             proposedTopicsHeading.style.display = 'block';
@@ -134,7 +137,26 @@ function createPdfLink(pdfFile) {
     link.href = `/uploads/${pdfFile.filename}`;
     link.className = 'pdf-link';
     link.target = '_blank';
-    link.textContent = `View PDF: ${pdfFile.originalname}`;
+    link.style.verticalAlign = 'middle';
+    
+    // Create an icon element for the PDF
+    const icon = document.createElement('span');
+    icon.innerHTML = '📄';
+    icon.style.marginRight = '6px';
+    icon.style.fontSize = '1.1em';
+    icon.style.display = 'inline-block';
+    icon.style.verticalAlign = 'middle';
+    
+    // Create text element 
+    const text = document.createElement('span');
+    text.textContent = `${pdfFile.originalname}`;
+    text.style.verticalAlign = 'middle';
+    text.style.display = 'inline-block';
+    
+    // Add both to the link
+    link.appendChild(icon);
+    link.appendChild(text);
+    
     return link;
 }
 
@@ -157,14 +179,23 @@ function updateCurrentSelection(topics) {
         // Display PDF if available
         selectedPdfContainer.innerHTML = '';
         if (selectedTopic.pdfFile && selectedTopic.pdfFile.filename) {
+            const pdfContainer = document.createElement('div');
+            pdfContainer.style.display = 'flex';
+            pdfContainer.style.alignItems = 'center';
+            pdfContainer.style.justifyContent = 'center';
+            
             const pdfLink = createPdfLink(selectedTopic.pdfFile);
-            selectedPdfContainer.appendChild(pdfLink);
+            pdfContainer.appendChild(pdfLink);
+            
+            selectedPdfContainer.appendChild(pdfContainer);
             currentSelection.style.display = 'flex';
         } else if (currentUser && currentUser.isAdmin) {
             const noPdfMessage = document.createElement('p');
             noPdfMessage.textContent = 'No PDF uploaded yet. Please upload a reading material.';
             noPdfMessage.style.color = '#888';
             noPdfMessage.style.fontStyle = 'italic';
+            noPdfMessage.style.margin = '0';
+            noPdfMessage.style.padding = '8px 0';
             selectedPdfContainer.appendChild(noPdfMessage);
             currentSelection.style.display = 'flex';
         } else {
@@ -172,6 +203,8 @@ function updateCurrentSelection(topics) {
             noPdfMessage.textContent = 'Reading material will be uploaded soon.';
             noPdfMessage.style.color = '#888';
             noPdfMessage.style.fontStyle = 'italic';
+            noPdfMessage.style.margin = '0';
+            noPdfMessage.style.padding = '8px 0';
             selectedPdfContainer.appendChild(noPdfMessage);
             currentSelection.style.display = 'flex';
         }
@@ -191,18 +224,19 @@ function renderTopics(topics) {
     topicList.innerHTML = '';
     
     topics.forEach(topic => {
+        // Skip rendering the selected topic in the main list since it's already shown at the top
+        if (topic.isSelected) {
+            return;
+        }
+        
         const li = document.createElement('li');
         li.className = 'topic-item';
-        if (topic.isSelected) {
-            li.classList.add('selected-topic');
-        }
         
         const topicInfo = document.createElement('div');
         topicInfo.style.flexGrow = '1';
         
         const topicText = document.createElement('span');
         topicText.textContent = topic.text;
-        topicText.style.fontWeight = topic.isSelected ? 'bold' : 'normal';
         topicInfo.appendChild(topicText);
         
         // Add voters link
@@ -230,11 +264,10 @@ function renderTopics(topics) {
         topicInfo.appendChild(votersLink);
         topicInfo.appendChild(votersContainer);
         
-        // Never show week dates as requested
-        
         const voteContainer = document.createElement('div');
         voteContainer.style.display = 'flex';
         voteContainer.style.alignItems = 'center';
+        voteContainer.style.minHeight = '40px'; // Match the minimum height for alignment
         
         const voteCount = document.createElement('span');
         voteCount.className = 'votes';
@@ -282,19 +315,6 @@ function renderTopics(topics) {
         
         li.appendChild(topicInfo);
         li.appendChild(voteContainer);
-        
-        // Add PDF link if available and topic is selected
-        if (topic.isSelected && topic.pdfFile && topic.pdfFile.filename) {
-            const pdfContainer = document.createElement('div');
-            pdfContainer.style.width = '100%';
-            pdfContainer.style.marginTop = '10px';
-            pdfContainer.style.textAlign = 'right';
-            
-            const pdfLink = createPdfLink(topic.pdfFile);
-            pdfContainer.appendChild(pdfLink);
-            
-            li.appendChild(pdfContainer);
-        }
         
         topicList.appendChild(li);
     });
