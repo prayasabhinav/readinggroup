@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reading Group Topic Voting</title>
+    <title>Antardhun Reading Group Topic Voting Interface @ Anant</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -15,11 +15,27 @@
             text-align: center;
             color: #333;
         }
+        .app-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+            padding: 0;
+            text-align: left;
+            letter-spacing: 0.5px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.2;
+            text-transform: none;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eaeaea;
         }
         .user-info {
             display: flex;
@@ -157,11 +173,27 @@
         .warning-btn:hover {
             background-color: #e0a800;
         }
+        
+        /* Media query for smaller screens */
+        @media (max-width: 600px) {
+            .app-title {
+                font-size: 1.2rem;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .user-info {
+                margin-top: 10px;
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>University Reading Group Topics</h1>
+        <h1 class="app-title">Antardhun Reading Group Topic Voting Interface @ Anant</h1>
         <div class="user-info">
             <span id="user-name"></span>
             <button id="login-btn" class="login-btn">Login with Google</button>

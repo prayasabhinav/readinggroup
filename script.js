@@ -205,6 +205,31 @@ function renderTopics(topics) {
         topicText.style.fontWeight = topic.isSelected ? 'bold' : 'normal';
         topicInfo.appendChild(topicText);
         
+        // Add voters link
+        const votersLink = document.createElement('a');
+        votersLink.href = '#';
+        votersLink.textContent = 'Show voters';
+        votersLink.style.fontSize = '0.8em';
+        votersLink.style.marginLeft = '10px';
+        votersLink.style.color = '#2196F3';
+        votersLink.style.cursor = 'pointer';
+        votersLink.onclick = (e) => {
+            e.preventDefault();
+            showVoters(topic._id);
+        };
+        
+        const votersContainer = document.createElement('div');
+        votersContainer.id = `voters-${topic._id}`;
+        votersContainer.style.display = 'none';
+        votersContainer.style.marginTop = '5px';
+        votersContainer.style.fontSize = '0.8em';
+        votersContainer.style.fontStyle = 'italic';
+        votersContainer.style.color = '#666';
+        
+        topicInfo.appendChild(document.createElement('br'));
+        topicInfo.appendChild(votersLink);
+        topicInfo.appendChild(votersContainer);
+        
         // Never show week dates as requested
         
         const voteContainer = document.createElement('div');
@@ -223,7 +248,34 @@ function renderTopics(topics) {
                           Array.isArray(currentUser.upvotedTopics) && 
                           currentUser.upvotedTopics.includes(topic._id);
         voteBtn.disabled = !currentUser || hasUpvoted;
-        voteBtn.onclick = () => upvoteTopic(topic._id);
+        
+        // Optimistic UI update for faster upvote
+        voteBtn.onclick = () => {
+            // Disable button immediately for better UX
+            voteBtn.disabled = true;
+            
+            // Optimistically update the UI
+            voteCount.textContent = (parseInt(voteCount.textContent) || 0) + 1;
+            if (!currentUser.upvotedTopics) {
+                currentUser.upvotedTopics = [];
+            }
+            currentUser.upvotedTopics.push(topic._id);
+            
+            // Initiate the actual API call
+            upvoteTopic(topic._id)
+                .catch(() => {
+                    // Rollback optimistic update if there's an error
+                    voteCount.textContent = (parseInt(voteCount.textContent) || 1) - 1;
+                    voteBtn.disabled = false;
+                    if (currentUser.upvotedTopics) {
+                        const idx = currentUser.upvotedTopics.indexOf(topic._id);
+                        if (idx !== -1) {
+                            currentUser.upvotedTopics.splice(idx, 1);
+                        }
+                    }
+                    alert('Failed to upvote. Please try again.');
+                });
+        };
         
         voteContainer.appendChild(voteCount);
         voteContainer.appendChild(voteBtn);
@@ -246,6 +298,44 @@ function renderTopics(topics) {
         
         topicList.appendChild(li);
     });
+}
+
+// Function to fetch and show voters for a topic
+async function showVoters(topicId) {
+    const votersContainer = document.getElementById(`voters-${topicId}`);
+    const voterLink = votersContainer.previousSibling;
+    
+    // Toggle visibility
+    if (votersContainer.style.display === 'none') {
+        votersContainer.innerHTML = 'Loading voters...';
+        votersContainer.style.display = 'block';
+        voterLink.textContent = 'Hide voters';
+        
+        try {
+            const response = await fetch(`${API_BASE}/api/topics/${topicId}/voters`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const voters = await response.json();
+                
+                if (voters.length === 0) {
+                    votersContainer.textContent = 'No upvotes yet';
+                } else {
+                    const voterNames = voters.map(v => v.name || v.email).join(', ');
+                    votersContainer.textContent = `Upvoted by: ${voterNames}`;
+                }
+            } else {
+                votersContainer.textContent = 'Failed to load voters';
+            }
+        } catch (error) {
+            console.error('Error fetching voters:', error);
+            votersContainer.textContent = 'Error loading voters';
+        }
+    } else {
+        votersContainer.style.display = 'none';
+        voterLink.textContent = 'Show voters';
+    }
 }
 
 // Update topic select dropdown
@@ -299,35 +389,28 @@ async function addTopic(text) {
     }
 }
 
-// Upvote a topic
+// Upvote a topic - make this return a promise for optimistic UI
 async function upvoteTopic(topicId) {
+    console.log('Attempting to upvote topic:', topicId);
+    
     try {
-        console.log(`Attempting to upvote topic: ${topicId}`);
-        
-        if (!currentUser) {
-            console.error('Cannot upvote: User not logged in');
-            return;
-        }
-        
         const response = await fetch(`${API_BASE}/api/topics/${topicId}/upvote`, {
             method: 'POST',
             credentials: 'include'
         });
         
-        if (response.ok) {
-            console.log('Upvote successful');
-            // Refresh user data and topic list
-            await checkAuth(); // Refresh user data 
-            await loadTopics(); 
-            await fetchUserStats();
-        } else {
-            const errorData = await response.json();
-            console.error('Upvote error:', errorData.error);
-            alert(`Error: ${errorData.error}`);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('Upvote error:', errorData.error || response.statusText);
+            throw new Error(errorData.error || 'Failed to upvote');
         }
+        
+        console.log('Upvote successful');
+        fetchUserStats();
+        return await response.json();
     } catch (error) {
         console.error('Failed to upvote topic:', error);
-        alert('Failed to upvote topic. Please try again.');
+        throw error;
     }
 }
 

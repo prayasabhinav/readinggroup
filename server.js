@@ -83,7 +83,7 @@ const topicSchema = new mongoose.Schema({
         originalname: String,
         path: String
     },
-    upvotedBy: [String] // Add this field to track users who upvoted
+    upvotedBy: [String] // Track users who upvoted
 });
 
 const Topic = mongoose.model('Topic', topicSchema);
@@ -94,7 +94,7 @@ const inMemoryUsers = {};
 const inMemoryTopics = [];
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
+mongoose.connect(MONGODB_URI, {
   dbName: 'readinggroup',
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -374,6 +374,58 @@ app.get('/api/user', (req, res) => {
     }
 });
 
+// Get users who upvoted a specific topic
+app.get('/api/topics/:id/voters', async (req, res) => {
+    try {
+        const topic = await Topic.findById(req.params.id);
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+        
+        // Get all users who upvoted this topic
+        const voters = [];
+        if (Array.isArray(topic.upvotedBy) && topic.upvotedBy.length > 0) {
+            // Collect all unique voters
+            for (const upvoterId of topic.upvotedBy) {
+                // Check if it looks like an email
+                if (upvoterId.includes('@')) {
+                    if (!voters.some(v => v.email === upvoterId)) {
+                        voters.push({ email: upvoterId, name: upvoterId.split('@')[0] });
+                    }
+                } else if (/^[0-9a-fA-F]{24}$/.test(upvoterId)) {
+                    // Try to find by ID
+                    const user = await User.findById(upvoterId);
+                    if (user && !voters.some(v => v.email === user.email)) {
+                        voters.push({ 
+                            email: user.email, 
+                            name: user.name || user.email.split('@')[0] 
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Also check users with this topic in their upvotedTopics array
+        const topicId = topic._id.toString();
+        const users = await User.find();
+        for (const user of users) {
+            if (user.upvotedTopics && user.upvotedTopics.includes(topicId)) {
+                if (!voters.some(v => v.email === user.email)) {
+                    voters.push({ 
+                        email: user.email, 
+                        name: user.name || user.email.split('@')[0]
+                    });
+                }
+            }
+        }
+        
+        res.json(voters);
+    } catch (error) {
+        console.error('Error fetching topic voters:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get user stats
 app.get('/api/user/stats', async (req, res) => {
     if (!req.user) {
@@ -426,7 +478,8 @@ app.post('/api/topics', async (req, res) => {
         const topic = await Topic.create({
             text: req.body.text,
             votes: 0,
-            proposedBy: req.user.email
+            proposedBy: req.user.email,
+            upvotedBy: [] // Initialize empty array
         });
         res.json(topic);
     } catch (error) {
@@ -434,66 +487,70 @@ app.post('/api/topics', async (req, res) => {
     }
 });
 
+// Optimized upvote endpoint for faster response
 app.post('/api/topics/:id/upvote', async (req, res) => {
     if (!req.user) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     
     try {
-        // Get user from database to ensure we have the latest data
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
         const topic = await Topic.findById(req.params.id);
         if (!topic) {
             return res.status(404).json({ error: 'Topic not found' });
         }
 
         const topicId = topic._id.toString();
-        const userId = user._id.toString();
+        const userId = req.user._id.toString();
+        const userEmail = req.user.email;
+        
+        // Initialize arrays if they don't exist
+        if (!req.user.upvotedTopics) req.user.upvotedTopics = [];
+        if (!topic.upvotedBy) topic.upvotedBy = [];
         
         // Check if user has already upvoted this topic
-        if (user.upvotedTopics && user.upvotedTopics.includes(topicId)) {
+        if (req.user.upvotedTopics.includes(topicId)) {
             return res.status(400).json({ error: 'Already upvoted' });
         }
 
-        // Initialize upvotedTopics array if it doesn't exist
-        if (!user.upvotedTopics) {
-            user.upvotedTopics = [];
-        }
+        // Start both updates asynchronously for performance
+        const topicUpdatePromise = (async () => {
+            // Update topic
+            topic.votes = (topic.votes || 0) + 1;
+            
+            // Add user to upvotedBy - we'll update both ID and email for robustness
+            if (!topic.upvotedBy.includes(userId)) {
+                topic.upvotedBy.push(userId);
+            }
+            if (!topic.upvotedBy.includes(userEmail)) {
+                topic.upvotedBy.push(userEmail);
+            }
+            
+            return topic.save();
+        })();
         
-        // Initialize upvotedBy array if it doesn't exist
-        if (!topic.upvotedBy) {
-            topic.upvotedBy = [];
-        }
+        const userUpdatePromise = (async () => {
+            // Update user
+            const user = await User.findById(req.user._id);
+            if (user) {
+                if (!user.upvotedTopics) user.upvotedTopics = [];
+                user.upvotedTopics.push(topicId);
+                await user.save();
+                
+                // Update session user
+                req.user.upvotedTopics = user.upvotedTopics;
+            }
+        })();
         
-        // Update topic votes and user's upvoted topics
-        topic.votes = (topic.votes || 0) + 1;
-        user.upvotedTopics.push(topicId);
+        // Wait for the topic update to finish first so we can return it quickly
+        const updatedTopic = await topicUpdatePromise;
         
-        // Add user to topic's upvotedBy array using both ID and email
-        // This ensures we can find users regardless of how they're identified
-        if (!topic.upvotedBy.includes(userId)) {
-            topic.upvotedBy.push(userId);
-        }
-        if (!topic.upvotedBy.includes(user.email)) {
-            topic.upvotedBy.push(user.email);
-        }
+        // Return the response immediately without waiting for user update
+        res.json(updatedTopic);
         
-        console.log(`User ${user.email} upvoting topic ${topicId}`);
-        console.log(`User's upvotedTopics before save:`, user.upvotedTopics);
-        console.log(`Topic's upvotedBy before save:`, topic.upvotedBy);
-        
-        // Save both documents
-        await topic.save();
-        await user.save();
-        
-        // Update the session with the latest user data
-        req.user = user;
-        
-        res.json(topic);
+        // Continue user update in the background
+        userUpdatePromise.catch(error => {
+            console.error('Background user update error:', error);
+        });
     } catch (error) {
         console.error('Upvote error:', error);
         res.status(500).json({ error: error.message });
@@ -504,6 +561,7 @@ app.post('/api/topics/:id/select', async (req, res) => {
     if (!req.user || !req.user.isAdmin) {
         return res.status(403).json({ error: 'Not authorized' });
     }
+    
     try {
         console.log(`Admin ${req.user.email} is selecting topic ${req.params.id}`);
         
@@ -569,67 +627,75 @@ app.post('/api/topics/:id/select', async (req, res) => {
             }
         }
         
-        // Process upvoters - handle upvotedBy array
-        if (Array.isArray(topic.upvotedBy) && topic.upvotedBy.length > 0) {
-            console.log(`Processing ${topic.upvotedBy.length} upvoters from upvotedBy array`);
-            
-            for (const upvoterId of topic.upvotedBy) {
-                try {
-                    // Try to find upvoter by email first
-                    let upvoter = await User.findOne({ email: upvoterId });
-                    
-                    // If not found by email and looks like ObjectId, try by ID
-                    if (!upvoter && /^[0-9a-fA-F]{24}$/.test(upvoterId)) {
-                        upvoter = await User.findById(upvoterId);
-                    }
-                    
-                    if (upvoter) {
-                        console.log(`Found upvoter: ${upvoter.email}`);
-                        if (!upvoter.wonTopics) {
-                            upvoter.wonTopics = [];
-                        }
-                        
-                        const topicIdStr = topic._id.toString();
-                        if (!upvoter.wonTopics.includes(topicIdStr)) {
-                            upvoter.wonTopics.push(topicIdStr);
-                            await upvoter.save();
-                            console.log(`Updated upvoter's wonTopics array`);
-                        }
-                    } else {
-                        console.log(`Could not find upvoter with identifier: ${upvoterId}`);
-                    }
-                } catch (upvoterError) {
-                    console.error(`Error updating upvoter ${upvoterId}: ${upvoterError.message}`);
-                    // Continue processing other upvoters
-                }
-            }
-        } else {
-            console.log(`No upvotedBy array found, checking upvotedTopics references`);
-            
-            // NO updateMany - use individual updates for safety
+        // Process upvoters - handle upvotedBy array - do this in the background
+        setTimeout(async () => {
             try {
-                // Get all users
-                const allUsers = await User.find();
-                
-                // Find users who upvoted this topic
-                for (const user of allUsers) {
-                    if (user.upvotedTopics && user.upvotedTopics.includes(topic._id.toString())) {
-                        if (!user.wonTopics) {
-                            user.wonTopics = [];
-                        }
-                        
-                        if (!user.wonTopics.includes(topic._id.toString())) {
-                            user.wonTopics.push(topic._id.toString());
-                            await user.save();
-                            console.log(`Updated user ${user.email}'s wonTopics array`);
+                if (Array.isArray(topic.upvotedBy) && topic.upvotedBy.length > 0) {
+                    console.log(`Processing ${topic.upvotedBy.length} upvoters from upvotedBy array`);
+                    
+                    for (const upvoterId of topic.upvotedBy) {
+                        try {
+                            // Try to find upvoter by email first
+                            let upvoter = await User.findOne({ email: upvoterId });
+                            
+                            // If not found by email and looks like ObjectId, try by ID
+                            if (!upvoter && /^[0-9a-fA-F]{24}$/.test(upvoterId)) {
+                                upvoter = await User.findById(upvoterId);
+                            }
+                            
+                            if (upvoter) {
+                                console.log(`Found upvoter: ${upvoter.email}`);
+                                if (!upvoter.wonTopics) {
+                                    upvoter.wonTopics = [];
+                                }
+                                
+                                const topicIdStr = topic._id.toString();
+                                if (!upvoter.wonTopics.includes(topicIdStr)) {
+                                    upvoter.wonTopics.push(topicIdStr);
+                                    await upvoter.save();
+                                    console.log(`Updated upvoter's wonTopics array`);
+                                }
+                            } else {
+                                console.log(`Could not find upvoter with identifier: ${upvoterId}`);
+                            }
+                        } catch (upvoterError) {
+                            console.error(`Error updating upvoter ${upvoterId}: ${upvoterError.message}`);
+                            // Continue processing other upvoters
                         }
                     }
+                } else {
+                    console.log(`No upvotedBy array found, checking upvotedTopics references`);
+                    
+                    // NO updateMany - use individual updates for safety
+                    try {
+                        // Get all users
+                        const allUsers = await User.find();
+                        
+                        // Find users who upvoted this topic
+                        for (const user of allUsers) {
+                            if (user.upvotedTopics && user.upvotedTopics.includes(topic._id.toString())) {
+                                if (!user.wonTopics) {
+                                    user.wonTopics = [];
+                                }
+                                
+                                if (!user.wonTopics.includes(topic._id.toString())) {
+                                    user.wonTopics.push(topic._id.toString());
+                                    await user.save();
+                                    console.log(`Updated user ${user.email}'s wonTopics array`);
+                                }
+                            }
+                        }
+                    } catch (userError) {
+                        console.error(`Error updating users who upvoted: ${userError.message}`);
+                        // Continue with the process
+                    }
                 }
-            } catch (userError) {
-                console.error(`Error updating users who upvoted: ${userError.message}`);
-                // Continue with the process
+                
+                console.log(`Topic ${topic._id} selection background processing completed`);
+            } catch (error) {
+                console.error('Background processing error:', error);
             }
-        }
+        }, 0);
         
         console.log(`Topic ${topic._id} selection completed successfully`);
         res.json(topic);
