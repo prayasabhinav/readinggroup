@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64px" height="64px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Open Book Favicon</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Book Binding -->
+        <rect fill="#2196F3" x="30" y="14" width="4" height="36" rx="2"></rect>
+        
+        <!-- Left Page -->
+        <path d="M4,50 L30,50 L30,14 C20,14 12,18 4,26 L4,50 Z" fill="#ffffff" stroke="#2196F3" stroke-width="2"></path>
+        
+        <!-- Right Page -->
+        <path d="M34,50 L60,50 L60,26 C52,18 44,14 34,14 L34,50 Z" fill="#ffffff" stroke="#2196F3" stroke-width="2"></path>
+        
+        <!-- Page Lines - Left -->
+        <line x1="10" y1="26" x2="24" y2="26" stroke="#2196F3" stroke-width="1"></line>
+        <line x1="10" y1="34" x2="24" y2="34" stroke="#2196F3" stroke-width="1"></line>
+        <line x1="10" y1="42" x2="24" y2="42" stroke="#2196F3" stroke-width="1"></line>
+        
+        <!-- Page Lines - Right -->
+        <line x1="40" y1="26" x2="54" y2="26" stroke="#2196F3" stroke-width="1"></line>
+        <line x1="40" y1="34" x2="54" y2="34" stroke="#2196F3" stroke-width="1"></line>
+        <line x1="40" y1="42" x2="54" y2="42" stroke="#2196F3" stroke-width="1"></line>
+    </g>
+</svg> 

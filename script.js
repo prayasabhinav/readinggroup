@@ -111,6 +111,9 @@ async function loadTopics() {
             return;
         }
         
+        // Sort topics by votes in descending order
+        topics.sort((a, b) => (b.votes || 0) - (a.votes || 0));
+        
         // Count non-selected topics
         const nonSelectedTopics = topics.filter(topic => !topic.isSelected);
         
