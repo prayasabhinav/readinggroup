@@ -1,0 +1,11 @@
+# Allowed Domains for Google Login
+# Add each domain on a separate line
+# Comments start with #
+# Example:
+# google.com
+# example.edu
+
+# Add your allowed domains below: 
+anu.edu.in
+nid.edu
+depicentre.in

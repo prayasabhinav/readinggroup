@@ -93,6 +93,36 @@ let isUsingInMemoryMode = false;
 const inMemoryUsers = {};
 const inMemoryTopics = [];
 
+// Load allowed domains from the text file
+let allowedDomains = [];
+try {
+  if (fs.existsSync('./allowed_domains.txt')) {
+    const domainsFileContent = fs.readFileSync('./allowed_domains.txt', 'utf8');
+    allowedDomains = domainsFileContent
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
+    
+    console.log('Allowed domains loaded:', allowedDomains);
+  } else {
+    console.log('No allowed_domains.txt file found - allowing all domains');
+  }
+} catch (error) {
+  console.error('Error loading allowed domains:', error);
+}
+
+// Function to check if user's email domain is allowed
+function isAllowedDomain(email) {
+  // If no domains are specified, allow all
+  if (allowedDomains.length === 0) return true;
+  
+  // Get the domain part of the email
+  const domain = email.split('@')[1];
+  
+  // Check if domain is in the allowed list
+  return allowedDomains.includes(domain);
+}
+
 // Connect to MongoDB
 mongoose.connect(MONGODB_URI, {
   dbName: 'readinggroup',
@@ -277,6 +307,13 @@ try {
           }
           
           const email = profile.emails[0].value;
+          
+          // Check if the email domain is allowed
+          if (!isAllowedDomain(email)) {
+              console.error(`Login attempt from unauthorized domain: ${email}`);
+              return done(new Error('Your email domain is not authorized to use this application'), null);
+          }
+          
           let user = await User.findOne({ email });
           
           if (!user) {
@@ -284,7 +321,7 @@ try {
               user = await User.create({
                   email: email,
                   name: profile.displayName,
-                  isAdmin: email === 'prayas.abhinav@anu.edu.in',
+                  isAdmin: email === 'prayas.abhinav@anu.edu.au',
                   upvotedTopics: [],
                   wonTopics: []
               });
@@ -858,6 +895,71 @@ const ensureAuthenticated = (req, res, next) => {
 // Apply protection to routes
 app.get('/', ensureAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Get voters for a topic
+app.get('/api/topics/:id/voters', async (req, res) => {
+    try {
+        const topicId = req.params.id;
+        // Ensure the user is authenticated
+        if (!req.isAuthenticated()) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        // Find the topic
+        const topic = await Topic.findById(topicId);
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+        
+        // Get users who upvoted this topic
+        const users = await User.find({ upvotedTopics: topicId }, 'name email');
+        
+        res.json(users);
+    } catch (error) {
+        console.error('Error fetching voters:', error);
+        res.status(500).json({ error: 'Failed to fetch voters' });
+    }
+});
+
+// Get proposer of a topic
+app.get('/api/topics/:id/proposer', async (req, res) => {
+    try {
+        const topicId = req.params.id;
+        // Ensure the user is authenticated
+        if (!req.isAuthenticated()) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        // Find the topic
+        const topic = await Topic.findById(topicId);
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+        
+        // Get the user who proposed this topic
+        let proposer = null;
+        
+        if (topic.proposedBy) {
+            // Check if proposedBy is an email
+            if (topic.proposedBy.includes('@')) {
+                proposer = await User.findOne({ email: topic.proposedBy }, 'name email');
+            } 
+            // If not an email and looks like an ObjectId, try finding by ID
+            else if (/^[0-9a-fA-F]{24}$/.test(topic.proposedBy)) {
+                proposer = await User.findById(topic.proposedBy, 'name email');
+            }
+        }
+        
+        if (!proposer) {
+            return res.json({ name: "Unknown proposer", email: topic.proposedBy || "unknown" });
+        }
+        
+        res.json(proposer);
+    } catch (error) {
+        console.error('Error fetching proposer:', error);
+        res.status(500).json({ error: 'Failed to fetch proposer' });
+    }
 });
 
 const PORT = process.env.PORT || 3000;

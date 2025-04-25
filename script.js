@@ -127,10 +127,14 @@ async function loadTopics() {
         renderTopics(topics);
         updateTopicSelect(topics);
         updateCurrentSelection(topics);
+        
+        // Return the topics array to allow proper Promise chaining
+        return topics;
     } catch (error) {
         console.error('Failed to load topics:', error);
         // Hide the heading if there's an error loading topics
         proposedTopicsHeading.style.display = 'none';
+        throw error; // Re-throw the error for proper error handling
     }
 }
 
@@ -232,95 +236,150 @@ function renderTopics(topics) {
             return;
         }
         
-        const li = document.createElement('li');
-        li.className = 'topic-item';
-        
-        const topicInfo = document.createElement('div');
-        topicInfo.style.flexGrow = '1';
-        
-        const topicText = document.createElement('span');
-        topicText.textContent = topic.text;
-        topicInfo.appendChild(topicText);
-        
-        // Add voters link
-        const votersLink = document.createElement('a');
-        votersLink.href = '#';
-        votersLink.textContent = 'Show voters';
-        votersLink.style.fontSize = '0.8em';
-        votersLink.style.marginLeft = '10px';
-        votersLink.style.color = '#2196F3';
-        votersLink.style.cursor = 'pointer';
-        votersLink.onclick = (e) => {
-            e.preventDefault();
-            showVoters(topic._id);
-        };
-        
-        const votersContainer = document.createElement('div');
-        votersContainer.id = `voters-${topic._id}`;
-        votersContainer.style.display = 'none';
-        votersContainer.style.marginTop = '5px';
-        votersContainer.style.fontSize = '0.8em';
-        votersContainer.style.fontStyle = 'italic';
-        votersContainer.style.color = '#666';
-        
-        topicInfo.appendChild(document.createElement('br'));
-        topicInfo.appendChild(votersLink);
-        topicInfo.appendChild(votersContainer);
-        
-        const voteContainer = document.createElement('div');
-        voteContainer.style.display = 'flex';
-        voteContainer.style.alignItems = 'center';
-        voteContainer.style.minHeight = '40px'; // Match the minimum height for alignment
-        
-        const voteCount = document.createElement('span');
-        voteCount.className = 'votes';
-        voteCount.textContent = topic.votes;
-        
-        const voteBtn = document.createElement('button');
-        voteBtn.className = 'vote-btn';
-        voteBtn.textContent = 'Upvote';
-        const hasUpvoted = currentUser && 
-                          currentUser.upvotedTopics && 
-                          Array.isArray(currentUser.upvotedTopics) && 
-                          currentUser.upvotedTopics.includes(topic._id);
-        voteBtn.disabled = !currentUser || hasUpvoted;
-        
-        // Optimistic UI update for faster upvote
-        voteBtn.onclick = () => {
-            // Disable button immediately for better UX
-            voteBtn.disabled = true;
-            
-            // Optimistically update the UI
-            voteCount.textContent = (parseInt(voteCount.textContent) || 0) + 1;
-            if (!currentUser.upvotedTopics) {
-                currentUser.upvotedTopics = [];
-            }
-            currentUser.upvotedTopics.push(topic._id);
-            
-            // Initiate the actual API call
-            upvoteTopic(topic._id)
-                .catch(() => {
-                    // Rollback optimistic update if there's an error
-                    voteCount.textContent = (parseInt(voteCount.textContent) || 1) - 1;
-                    voteBtn.disabled = false;
-                    if (currentUser.upvotedTopics) {
-                        const idx = currentUser.upvotedTopics.indexOf(topic._id);
-                        if (idx !== -1) {
-                            currentUser.upvotedTopics.splice(idx, 1);
-                        }
-                    }
-                    alert('Failed to upvote. Please try again.');
-                });
-        };
-        
-        voteContainer.appendChild(voteCount);
-        voteContainer.appendChild(voteBtn);
-        
-        li.appendChild(topicInfo);
-        li.appendChild(voteContainer);
-        
-        topicList.appendChild(li);
+        const topicElement = createTopicElement(topic);
+        topicList.appendChild(topicElement);
     });
+}
+
+// Helper function to create a topic element
+function createTopicElement(topic) {
+    const li = document.createElement('li');
+    li.className = 'topic-item';
+    li.setAttribute('data-id', topic._id);
+    
+    const topicInfo = document.createElement('div');
+    topicInfo.style.flexGrow = '1';
+    
+    const topicText = document.createElement('span');
+    topicText.textContent = topic.text;
+    topicInfo.appendChild(topicText);
+    
+    // Add voters link
+    const votersLink = document.createElement('a');
+    votersLink.href = '#';
+    votersLink.textContent = 'Show voters';
+    votersLink.style.fontSize = '0.8em';
+    votersLink.style.marginLeft = '10px';
+    votersLink.style.color = '#2196F3';
+    votersLink.style.cursor = 'pointer';
+    votersLink.onclick = (e) => {
+        e.preventDefault();
+        showVoters(topic._id);
+    };
+    
+    const votersContainer = document.createElement('div');
+    votersContainer.id = `voters-${topic._id}`;
+    votersContainer.style.display = 'none';
+    votersContainer.style.marginTop = '5px';
+    votersContainer.style.fontSize = '0.8em';
+    votersContainer.style.fontStyle = 'italic';
+    votersContainer.style.color = '#666';
+    
+    topicInfo.appendChild(document.createElement('br'));
+    topicInfo.appendChild(votersLink);
+    topicInfo.appendChild(votersContainer);
+    
+    // Add proposer link
+    const proposerLink = document.createElement('a');
+    proposerLink.href = '#';
+    proposerLink.textContent = 'Show proposer';
+    proposerLink.style.fontSize = '0.8em';
+    proposerLink.style.marginLeft = '10px';
+    proposerLink.style.color = '#2196F3';
+    proposerLink.style.cursor = 'pointer';
+    
+    const proposerContainer = document.createElement('div');
+    proposerContainer.id = `proposer-${topic._id}`;
+    proposerContainer.style.display = 'none';
+    proposerContainer.style.marginTop = '5px';
+    proposerContainer.style.fontSize = '0.8em';
+    proposerContainer.style.fontStyle = 'italic';
+    proposerContainer.style.color = '#666';
+    
+    proposerLink.onclick = (e) => {
+        e.preventDefault();
+        showProposer(topic._id, proposerLink, proposerContainer);
+    };
+    
+    topicInfo.appendChild(proposerLink);
+    topicInfo.appendChild(proposerContainer);
+    
+    const voteContainer = document.createElement('div');
+    voteContainer.style.display = 'flex';
+    voteContainer.style.alignItems = 'center';
+    voteContainer.style.minHeight = '40px'; // Match the minimum height for alignment
+    
+    const voteCount = document.createElement('span');
+    voteCount.className = 'votes';
+    voteCount.textContent = topic.votes;
+    
+    const voteBtn = document.createElement('button');
+    voteBtn.className = 'vote-btn';
+    voteBtn.textContent = 'Upvote';
+    const hasUpvoted = currentUser && 
+                      currentUser.upvotedTopics && 
+                      Array.isArray(currentUser.upvotedTopics) && 
+                      currentUser.upvotedTopics.includes(topic._id);
+    voteBtn.disabled = !currentUser || hasUpvoted;
+    
+    // Optimistic UI update for faster upvote
+    voteBtn.onclick = () => {
+        // Disable button immediately for better UX
+        voteBtn.disabled = true;
+        
+        // Apply highlight to the current topic item
+        const parentLi = voteBtn.closest('.topic-item');
+        if (parentLi) {
+            // Apply a background highlight with a smooth transition
+            parentLi.style.transition = "background-color 0.3s ease";
+            parentLi.style.backgroundColor = "#e3f2fd";
+            
+            // Remove the highlight after a short delay
+            setTimeout(() => {
+                parentLi.style.backgroundColor = "";
+            }, 800);
+        }
+        
+        // Optimistically update the UI
+        voteCount.textContent = (parseInt(voteCount.textContent) || 0) + 1;
+        if (!currentUser.upvotedTopics) {
+            currentUser.upvotedTopics = [];
+        }
+        currentUser.upvotedTopics.push(topic._id);
+        
+        // Initiate the actual API call
+        upvoteTopic(topic._id)
+            .then(() => {
+                // Add a small delay to let the user see the highlight before reordering
+                setTimeout(() => {
+                    reorderTopics();
+                }, 300);
+            })
+            .catch(() => {
+                // Rollback optimistic update if there's an error
+                voteCount.textContent = (parseInt(voteCount.textContent) || 1) - 1;
+                voteBtn.disabled = false;
+                if (currentUser.upvotedTopics) {
+                    const idx = currentUser.upvotedTopics.indexOf(topic._id);
+                    if (idx !== -1) {
+                        currentUser.upvotedTopics.splice(idx, 1);
+                    }
+                }
+                // Reset the background color
+                if (parentLi) {
+                    parentLi.style.backgroundColor = "";
+                }
+                alert('Failed to upvote. Please try again.');
+            });
+    };
+    
+    voteContainer.appendChild(voteCount);
+    voteContainer.appendChild(voteBtn);
+    
+    li.appendChild(topicInfo);
+    li.appendChild(voteContainer);
+    
+    return li;
 }
 
 // Function to fetch and show voters for a topic
@@ -358,6 +417,39 @@ async function showVoters(topicId) {
     } else {
         votersContainer.style.display = 'none';
         voterLink.textContent = 'Show voters';
+    }
+}
+
+// Function to fetch and show proposer of a topic
+async function showProposer(topicId, proposerLink, proposerContainer) {
+    // Toggle visibility
+    if (proposerContainer.style.display === 'none') {
+        proposerContainer.innerHTML = 'Loading proposer...';
+        proposerContainer.style.display = 'block';
+        proposerLink.textContent = 'Hide proposer';
+        
+        try {
+            const response = await fetch(`${API_BASE}/api/topics/${topicId}/proposer`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const proposer = await response.json();
+                if (proposer && proposer.name) {
+                    proposerContainer.textContent = `Proposed by: ${proposer.name}`;
+                } else {
+                    proposerContainer.textContent = 'Proposer information not available';
+                }
+            } else {
+                proposerContainer.textContent = 'Failed to load proposer';
+            }
+        } catch (error) {
+            console.error('Error fetching proposer:', error);
+            proposerContainer.textContent = 'Error loading proposer';
+        }
+    } else {
+        proposerContainer.style.display = 'none';
+        proposerLink.textContent = 'Show proposer';
     }
 }
 
@@ -619,4 +711,133 @@ clearExceptSelectedBtn.addEventListener('click', clearExceptSelected);
 
 // Initial load
 checkAuth();
-loadTopics(); 
+loadTopics();
+
+// Add a new function to reorder topics based on vote count
+function reorderTopics() {
+    try {
+        // Don't use animation if we have no topics
+        if (!topicList || !topicList.children.length) {
+            loadTopics();
+            return;
+        }
+        
+        // First, add animation styles if not already present
+        if (!document.getElementById('animation-styles')) {
+            const style = document.createElement('style');
+            style.id = 'animation-styles';
+            style.textContent = `
+                .topic-item {
+                    transition: transform 0.5s ease-out, opacity 0.5s ease-out;
+                }
+                .highlight-upvote {
+                    background-color: #e3f2fd;
+                }
+                .animating-topic {
+                    transition: transform 0.8s ease-out;
+                    z-index: 10;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Clear any existing highlight-upvote classes to avoid persistent blue backgrounds
+        document.querySelectorAll('.highlight-upvote').forEach(el => {
+            el.classList.remove('highlight-upvote');
+        });
+        
+        // Save the current positions of all topic items
+        const topicItems = Array.from(topicList.children);
+        const positions = {};
+        
+        // Record initial positions of all items
+        topicItems.forEach(item => {
+            const id = item.getAttribute('data-id');
+            const rect = item.getBoundingClientRect();
+            positions[id] = rect.top;
+        });
+        
+        // Get updated topic data
+        fetch(`${API_BASE}/api/topics`, { credentials: 'include' })
+            .then(response => response.json())
+            .then(topics => {
+                // Filter out selected topics and sort by votes
+                const nonSelectedTopics = topics.filter(topic => !topic.isSelected);
+                nonSelectedTopics.sort((a, b) => (b.votes || 0) - (a.votes || 0));
+                
+                // Update the vote count on each item
+                topicItems.forEach(item => {
+                    const id = item.getAttribute('data-id');
+                    const topicData = nonSelectedTopics.find(t => t._id === id);
+                    if (topicData) {
+                        const voteCountEl = item.querySelector('.votes');
+                        if (voteCountEl) {
+                            voteCountEl.textContent = topicData.votes;
+                        }
+                    }
+                });
+                
+                // Remove all items from the list but keep references
+                while (topicList.firstChild) {
+                    topicList.removeChild(topicList.firstChild);
+                }
+                
+                // Create a map of items by id for easy lookup
+                const itemsById = {};
+                topicItems.forEach(item => {
+                    const id = item.getAttribute('data-id');
+                    itemsById[id] = item;
+                });
+                
+                // Add items back in sorted order
+                nonSelectedTopics.forEach(topic => {
+                    const item = itemsById[topic._id];
+                    if (item) {
+                        topicList.appendChild(item);
+                    }
+                });
+                
+                // Force a reflow to ensure DOM updates
+                void topicList.offsetHeight;
+                
+                // Now apply transforms to animate from old to new positions
+                topicItems.forEach(item => {
+                    const id = item.getAttribute('data-id');
+                    const oldPosition = positions[id];
+                    const newPosition = item.getBoundingClientRect().top;
+                    const delta = oldPosition - newPosition;
+                    
+                    // If there's a significant change in position, animate it
+                    if (Math.abs(delta) > 5) {
+                        // Add the animation class
+                        item.classList.add('animating-topic');
+                        
+                        // Start at the old position
+                        item.style.transform = `translateY(${delta}px)`;
+                        
+                        // Force a reflow
+                        void item.offsetHeight;
+                        
+                        // Animate to the new position
+                        setTimeout(() => {
+                            item.style.transform = 'translateY(0)';
+                        }, 10);
+                        
+                        // Remove the animation class when finished
+                        item.addEventListener('transitionend', function onEnd() {
+                            item.classList.remove('animating-topic');
+                            item.removeEventListener('transitionend', onEnd);
+                        }, { once: true });
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error updating topics:', error);
+                loadTopics(); // Fall back to reload if animation fails
+            });
+            
+    } catch (error) {
+        console.error('Animation error, falling back to reload:', error);
+        loadTopics();
+    }
+} 
